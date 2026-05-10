@@ -1,0 +1,594 @@
+
+<h2 class="sr-only">Comprehensive pharma ecosystem analysis dashboard covering 12 stakeholder categories across Maharashtra, Gujarat and Madhya Pradesh</h2>
+
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:var(--font-sans);color:var(--color-text-primary)}
+.tabs{display:flex;flex-wrap:wrap;gap:6px;padding:1rem 1rem 0;border-bottom:0.5px solid var(--color-border-tertiary);margin-bottom:1rem}
+.tab{padding:6px 14px;font-size:13px;border:0.5px solid var(--color-border-secondary);border-radius:var(--border-radius-md);cursor:pointer;background:transparent;color:var(--color-text-secondary)}
+.tab.active{background:var(--color-background-secondary);color:var(--color-text-primary);border-color:var(--color-border-primary);font-weight:500}
+.section{display:none;padding:0 1rem 1.5rem}
+.section.active{display:block}
+.metrics{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:10px;margin-bottom:1.25rem}
+.metric{background:var(--color-background-secondary);border-radius:var(--border-radius-md);padding:0.85rem 1rem}
+.metric .val{font-size:22px;font-weight:500;line-height:1.1}
+.metric .lbl{font-size:12px;color:var(--color-text-secondary);margin-top:4px}
+.charts-2{display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin-bottom:1rem}
+.charts-3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:1rem;margin-bottom:1rem}
+.chart-card{background:var(--color-background-primary);border:0.5px solid var(--color-border-tertiary);border-radius:var(--border-radius-lg);padding:1rem}
+.chart-card h3{font-size:13px;font-weight:500;color:var(--color-text-secondary);margin-bottom:0.75rem}
+.leg{display:flex;flex-wrap:wrap;gap:10px;font-size:11px;color:var(--color-text-secondary);margin-top:8px}
+.leg span{display:flex;align-items:center;gap:4px}
+.leg .dot{width:9px;height:9px;border-radius:2px;flex-shrink:0}
+.bar-h{margin-bottom:6px}
+.bar-h .label{font-size:12px;color:var(--color-text-secondary);margin-bottom:3px;display:flex;justify-content:space-between}
+.bar-h .track{height:18px;background:var(--color-background-secondary);border-radius:4px;overflow:hidden}
+.bar-h .fill{height:100%;border-radius:4px;display:flex;align-items:center;padding-left:6px;font-size:11px;font-weight:500;color:#fff}
+.insight-box{background:var(--color-background-secondary);border-left:3px solid #378ADD;border-radius:0 var(--border-radius-md) var(--border-radius-md) 0;padding:0.75rem 1rem;margin-bottom:0.75rem;font-size:13px;line-height:1.6;color:var(--color-text-primary)}
+.insight-box b{font-weight:500}
+.section-title{font-size:15px;font-weight:500;margin-bottom:0.75rem;margin-top:1rem;color:var(--color-text-primary)}
+.full-w{grid-column:1/-1}
+.heatmap-table{width:100%;border-collapse:collapse;font-size:11px}
+.heatmap-table th{padding:5px 8px;text-align:left;font-weight:500;color:var(--color-text-secondary);border-bottom:0.5px solid var(--color-border-tertiary)}
+.heatmap-table td{padding:5px 8px;border-bottom:0.5px solid var(--color-border-tertiary)}
+.pill{display:inline-block;padding:2px 8px;border-radius:20px;font-size:11px;font-weight:500}
+.pill-blue{background:#e6f1fb;color:#185fa5}
+.pill-green{background:#eaf3de;color:#3b6d11}
+.pill-amber{background:#faeeda;color:#854f0b}
+.pill-red{background:#fcebeb;color:#a32d2d}
+.pill-gray{background:var(--color-background-secondary);color:var(--color-text-secondary)}
+</style>
+
+<div class="tabs" id="tabBar"></div>
+<div id="sections"></div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+<script>
+const TABS = ['MR analysis','Chemist & retail','Supply chain','Doctors — GP','Doctors — specialist','Brand managers','Cross-stakeholder insights'];
+
+const tabBar = document.getElementById('tabBar');
+const sectionsDiv = document.getElementById('sections');
+
+TABS.forEach((t,i)=>{
+  const btn = document.createElement('button');
+  btn.className='tab'+(i===0?' active':'');
+  btn.textContent=t;
+  btn.onclick=()=>{
+    document.querySelectorAll('.tab').forEach(b=>b.classList.remove('active'));
+    document.querySelectorAll('.section').forEach(s=>s.classList.remove('active'));
+    btn.classList.add('active');
+    document.getElementById('sec-'+i).classList.add('active');
+  };
+  tabBar.appendChild(btn);
+  const sec = document.createElement('div');
+  sec.className='section'+(i===0?' active':'');
+  sec.id='sec-'+i;
+  sectionsDiv.appendChild(sec);
+});
+
+function mkCanvas(id,h=200){
+  return `<div style="position:relative;height:${h}px"><canvas id="${id}" role="img" aria-label="chart"></canvas></div>`;
+}
+function mkChart(id,type,labels,datasets,opts={}){
+  const el=document.getElementById(id);
+  if(!el)return;
+  const dflt={responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}}};
+  new Chart(el,{type,data:{labels,datasets},options:{...dflt,...opts}});
+}
+function hBar(label,val,max,color){
+  const pct=Math.round(val/max*100);
+  return `<div class="bar-h"><div class="label"><span>${label}</span><span>${val}</span></div><div class="track"><div class="fill" style="width:${pct}%;background:${color}">${pct>18?val:''}</div></div></div>`;
+}
+
+const BLUE='#378ADD',TEAL='#1D9E75',CORAL='#D85A30',AMBER='#BA7517',PURPLE='#7F77DD',PINK='#D4537E',GREEN='#639922',GRAY='#888780',RED='#E24B4A';
+
+// ── SECTION 0: MR ANALYSIS ──
+document.getElementById('sec-0').innerHTML=`
+<div class="metrics">
+  <div class="metric"><div class="val">22</div><div class="lbl">MRs surveyed</div></div>
+  <div class="metric"><div class="val">8</div><div class="lbl">Companies represented</div></div>
+  <div class="metric"><div class="val">~12</div><div class="lbl">Avg doctors/day</div></div>
+  <div class="metric"><div class="val">~130</div><div class="lbl">Avg doctor list size</div></div>
+  <div class="metric"><div class="val">~6</div><div class="lbl">Avg chemists/day</div></div>
+  <div class="metric"><div class="val">59%</div><div class="lbl">Satisfied</div></div>
+</div>
+<div class="charts-2">
+  <div class="chart-card"><h3>Qualification distribution (n=22)</h3>${mkCanvas('mrQual',180)}
+    <div class="leg">
+      <span><span class="dot" style="background:${BLUE}"></span>B.Pharm (8)</span>
+      <span><span class="dot" style="background:${TEAL}"></span>D.Pharm (4)</span>
+      <span><span class="dot" style="background:${CORAL}"></span>B.A. / B.Sc (7)</span>
+      <span><span class="dot" style="background:${AMBER}"></span>MSc / MBA (3)</span>
+    </div>
+  </div>
+  <div class="chart-card"><h3>Experience distribution (years)</h3>${mkCanvas('mrExp',180)}
+    <div class="leg">
+      <span><span class="dot" style="background:${GREEN}"></span>0–5 yrs (6)</span>
+      <span><span class="dot" style="background:${BLUE}"></span>6–10 yrs (5)</span>
+      <span><span class="dot" style="background:${AMBER}"></span>11–20 yrs (8)</span>
+      <span><span class="dot" style="background:${CORAL}"></span>20+ yrs (3)</span>
+    </div>
+  </div>
+</div>
+<div class="charts-2">
+  <div class="chart-card"><h3>Competitive positioning (self-reported)</h3>${mkCanvas('mrPos',170)}
+    <div class="leg">
+      <span><span class="dot" style="background:${BLUE}"></span>Market leader (3)</span>
+      <span><span class="dot" style="background:${TEAL}"></span>Strong challenger (10)</span>
+      <span><span class="dot" style="background:${AMBER}"></span>Average player (6)</span>
+      <span><span class="dot" style="background:${GRAY}"></span>Not stated (3)</span>
+    </div>
+  </div>
+  <div class="chart-card"><h3>Key territory challenges (avg rank — lower=higher priority)</h3>
+    ${hBar('High competition',1.1,3,CORAL)}
+    ${hBar('Price pressure',2.4,3,AMBER)}
+    ${hBar('Chemist substitution',2.1,3,PINK)}
+    ${hBar('Low brand recall',2.0,3,PURPLE)}
+    ${hBar('Doctor access',2.3,3,BLUE)}
+    ${hBar('Workload pressure',1.8,3,GRAY)}
+  </div>
+</div>
+<div class="charts-2">
+  <div class="chart-card"><h3>Doctor visit frequency split (MRs avg)</h3>${mkCanvas('mrFreq',170)}
+    <div class="leg">
+      <span><span class="dot" style="background:${BLUE}"></span>Once/month (avg 27)</span>
+      <span><span class="dot" style="background:${TEAL}"></span>Twice (avg 55)</span>
+      <span><span class="dot" style="background:${CORAL}"></span>Thrice (avg 28)</span>
+      <span><span class="dot" style="background:${AMBER}"></span>Four times (avg 22)</span>
+    </div>
+  </div>
+  <div class="chart-card"><h3>MR key motivators (avg rank — lower=higher)</h3>
+    ${hBar('Incentives',1.3,5,BLUE)}
+    ${hBar('Recognition',2.0,5,TEAL)}
+    ${hBar('Promotions',2.4,5,CORAL)}
+    ${hBar('Job security',2.1,5,AMBER)}
+    ${hBar('Training',3.0,5,GRAY)}
+  </div>
+</div>
+<p class="section-title">Brand substitution at retail — MR-reported</p>
+<div class="charts-2">
+  <div class="chart-card"><h3>How often substitution happens</h3>${mkCanvas('mrSub',170)}
+    <div class="leg">
+      <span><span class="dot" style="background:${CORAL}"></span>Often (8)</span>
+      <span><span class="dot" style="background:${AMBER}"></span>Sometimes (9)</span>
+      <span><span class="dot" style="background:${BLUE}"></span>Rarely (3)</span>
+      <span><span class="dot" style="background:${GRAY}"></span>Not reported (2)</span>
+    </div>
+  </div>
+  <div class="chart-card"><h3>Top substitution reasons (frequency)</h3>
+    ${hBar('Lower price of alternative',9,13,CORAL)}
+    ${hBar('Brand not available',7,13,AMBER)}
+    ${hBar('Chemist preference',8,13,PINK)}
+    ${hBar('Patient demand',6,13,PURPLE)}
+    ${hBar('Doctor allows substitution',5,13,BLUE)}
+  </div>
+</div>
+<p class="section-title">Promotional tool effectiveness (MR-rated)</p>
+<div class="chart-card"><h3>Rating distribution across 4 input types</h3>${mkCanvas('mrPromo',200)}</div>
+`;
+
+setTimeout(()=>{
+  mkChart('mrQual','doughnut',['B.Pharm','D.Pharm','BA/BSc','MSc/MBA'],[{data:[8,4,7,3],backgroundColor:[BLUE,TEAL,CORAL,AMBER],borderWidth:1}],{cutout:'55%'});
+  mkChart('mrExp','doughnut',['0–5','6–10','11–20','20+'],[{data:[6,5,8,3],backgroundColor:[GREEN,BLUE,AMBER,CORAL],borderWidth:1}],{cutout:'55%'});
+  mkChart('mrPos','doughnut',['Market leader','Strong challenger','Average player','Not stated'],[{data:[3,10,6,3],backgroundColor:[BLUE,TEAL,AMBER,GRAY],borderWidth:1}],{cutout:'55%'});
+  mkChart('mrFreq','bar',['Once/month','Twice/month','Thrice/month','Four times'],[{data:[27,55,28,22],backgroundColor:[BLUE,TEAL,CORAL,AMBER],borderWidth:0}],{scales:{x:{grid:{display:false}},y:{beginAtZero:true}}});
+  mkChart('mrSub','doughnut',['Often','Sometimes','Rarely','Not reported'],[{data:[8,9,3,2],backgroundColor:[CORAL,AMBER,BLUE,GRAY],borderWidth:1}],{cutout:'55%'});
+  mkChart('mrPromo','bar',['Promotional input','Visual aids','Brand campaigns','Digital/CRM'],[
+    {label:'Excellent',data:[1,2,1,0],backgroundColor:GREEN,borderWidth:0},
+    {label:'Good',data:[8,7,6,4],backgroundColor:BLUE,borderWidth:0},
+    {label:'Average',data:[7,5,7,9],backgroundColor:AMBER,borderWidth:0},
+    {label:'Poor',data:[2,3,3,5],backgroundColor:CORAL,borderWidth:0}
+  ],{scales:{x:{stacked:true,grid:{display:false}},y:{stacked:true,beginAtZero:true}},plugins:{legend:{display:true,position:'bottom',labels:{font:{size:11},boxWidth:10}}}});
+},100);
+
+// ── SECTION 1: CHEMIST & RETAIL ──
+document.getElementById('sec-1').innerHTML=`
+<div class="metrics">
+  <div class="metric"><div class="val">20</div><div class="lbl">Chemists surveyed</div></div>
+  <div class="metric"><div class="val">5</div><div class="lbl">Regions covered</div></div>
+  <div class="metric"><div class="val">~60%</div><div class="lbl">Avg Rx share</div></div>
+  <div class="metric"><div class="val">Daily</div><div class="lbl">Most common order freq.</div></div>
+</div>
+<div class="charts-2">
+  <div class="chart-card"><h3>Chemist type distribution (n=20)</h3>${mkCanvas('chType',190)}
+    <div class="leg">
+      <span><span class="dot" style="background:${BLUE}"></span>Generic (4)</span>
+      <span><span class="dot" style="background:${TEAL}"></span>Branded/chain (5)</span>
+      <span><span class="dot" style="background:${CORAL}"></span>Inside hospital (5)</span>
+      <span><span class="dot" style="background:${AMBER}"></span>Generic/branded mixed (6)</span>
+    </div>
+  </div>
+  <div class="chart-card"><h3>Daily prescription volume bands</h3>${mkCanvas('chRx',190)}
+    <div class="leg">
+      <span><span class="dot" style="background:${BLUE}"></span>&lt;25 Rx (5)</span>
+      <span><span class="dot" style="background:${TEAL}"></span>26–50 Rx (8)</span>
+      <span><span class="dot" style="background:${AMBER}"></span>51–75 Rx (3)</span>
+      <span><span class="dot" style="background:${CORAL}"></span>76–100 Rx (3)</span>
+      <span><span class="dot" style="background:${GRAY}"></span>100+ Rx (1)</span>
+    </div>
+  </div>
+</div>
+<div class="charts-2">
+  <div class="chart-card"><h3>Company desirability factors (% very desirable)</h3>
+    ${hBar('Stock availability',17,20,BLUE)}
+    ${hBar('Replacement policy',15,20,TEAL)}
+    ${hBar('Management support',13,20,CORAL)}
+    ${hBar('Discount on bulk',11,20,AMBER)}
+    ${hBar('Digital ordering',9,20,PURPLE)}
+    ${hBar('Promotional gifts',5,20,GRAY)}
+    ${hBar('Product knowledge',8,20,PINK)}
+  </div>
+  <div class="chart-card"><h3>Substitution by chemist — primary triggers</h3>
+    ${hBar('Non-availability of brand',14,20,CORAL)}
+    ${hBar('Better profit margin',12,20,AMBER)}
+    ${hBar('Cheaper alternative exists',11,20,BLUE)}
+    ${hBar('Doctor allows sub.',7,20,PINK)}
+    ${hBar('Other',4,20,GRAY)}
+  </div>
+</div>
+<p class="section-title">Fastest-moving products (from RCPA + chemist data)</p>
+<div class="chart-card full-w"><h3>Top therapeutic categories by Rx rank (composite chemist ranking)</h3>${mkCanvas('chTherapy',200)}
+<div class="leg">
+  <span><span class="dot" style="background:${BLUE}"></span>Analgesics</span>
+  <span><span class="dot" style="background:${TEAL}"></span>Antibiotics / anti-infectives</span>
+  <span><span class="dot" style="background:${CORAL}"></span>Gastro / PPIs</span>
+  <span><span class="dot" style="background:${AMBER}"></span>Antihypertensives</span>
+  <span><span class="dot" style="background:${PURPLE}"></span>Vitamins / supplements</span>
+  <span><span class="dot" style="background:${PINK}"></span>Anti-allergics</span>
+  <span><span class="dot" style="background:${GREEN}"></span>Antidiabetics</span>
+  <span><span class="dot" style="background:${GRAY}"></span>Dermatology</span>
+</div>
+</div>
+<p class="section-title">Chemist satisfaction & service offerings</p>
+<div class="charts-2">
+  <div class="chart-card"><h3>Services offered by chemists</h3>${mkCanvas('chSvc',180)}</div>
+  <div class="chart-card"><h3>Billing software adoption</h3>
+    ${hBar('MARG ERP',6,20,BLUE)}
+    ${hBar('No software',6,20,CORAL)}
+    ${hBar('Centralized/ERP (chain)',3,20,TEAL)}
+    ${hBar('Visual Software',2,20,AMBER)}
+    ${hBar('Other named',3,20,GRAY)}
+  </div>
+</div>
+`;
+
+setTimeout(()=>{
+  mkChart('chType','doughnut',['Generic','Branded/chain','Inside hospital','Mixed'],[{data:[4,5,5,6],backgroundColor:[BLUE,TEAL,CORAL,AMBER],borderWidth:1}],{cutout:'55%'});
+  mkChart('chRx','doughnut',['<25','26–50','51–75','76–100','100+'],[{data:[5,8,3,3,1],backgroundColor:[BLUE,TEAL,AMBER,CORAL,GRAY],borderWidth:1}],{cutout:'55%'});
+  mkChart('chTherapy','bar',['Analgesics','Antibiotics','Gastro/PPIs','Antihypertensives','Vitamins','Anti-allergics','Antidiabetics','Dermatology'],[{data:[1.6,1.8,2.1,2.5,3.0,3.2,2.8,4.1],backgroundColor:[BLUE,TEAL,CORAL,AMBER,PURPLE,PINK,GREEN,GRAY],borderWidth:0}],{scales:{x:{grid:{display:false}},y:{beginAtZero:true,title:{display:true,text:'Avg rank (lower=top selling)',font:{size:11}}}},indexAxis:'y'});
+  mkChart('chSvc','bar',['Discount','Counselling','OTC advice','Home delivery','Loyalty card','Health checkup','Rx assist','ADR guidance'],[{data:[14,12,13,8,4,3,10,7],backgroundColor:BLUE,borderWidth:0}],{scales:{x:{grid:{display:false}},y:{beginAtZero:true}},indexAxis:'y'});
+},200);
+
+// ── SECTION 2: SUPPLY CHAIN ──
+document.getElementById('sec-2').innerHTML=`
+<div class="metrics">
+  <div class="metric"><div class="val">5</div><div class="lbl">Stockists surveyed</div></div>
+  <div class="metric"><div class="val">7–30</div><div class="lbl">Companies per stockist</div></div>
+  <div class="metric"><div class="val">Same day</div><div class="lbl">Best delivery time</div></div>
+  <div class="metric"><div class="val">2 hrs–1 day</div><div class="lbl">Typical delivery range</div></div>
+</div>
+<div class="charts-2">
+  <div class="chart-card"><h3>Factors for stockist-pharma collaboration (avg rank, n=5)</h3>
+    ${hBar('Demand from doctors/Rx',2.2,9,BLUE)}
+    ${hBar('Profit margin offered',2.8,9,TEAL)}
+    ${hBar('Product quality & efficacy',2.4,9,CORAL)}
+    ${hBar('Company reputation',2.6,9,AMBER)}
+    ${hBar('Credit period & terms',3.8,9,PURPLE)}
+    ${hBar('Product range/SKUs',4.2,9,GRAY)}
+    ${hBar('Marketing support',5.1,9,PINK)}
+  </div>
+  <div class="chart-card"><h3>Supply chain issue severity (stockist view)</h3>${mkCanvas('scIssue',200)}</div>
+</div>
+<div class="charts-2">
+  <div class="chart-card"><h3>Main reasons for goods returns (to company)</h3>
+    ${hBar('Product expiry',4,5,CORAL)}
+    ${hBar('Damaged goods',3,5,AMBER)}
+    ${hBar('Overstock by companies',2,5,BLUE)}
+    ${hBar('Near-expiry stock',1,5,GRAY)}
+  </div>
+  <div class="chart-card"><h3>Retailer complaints most cited (stockist-reported)</h3>
+    ${hBar('Non-availability fast movers',5,5,CORAL)}
+    ${hBar('Short/near expiry stock',4,5,AMBER)}
+    ${hBar('Delay in claim settlement',4,5,BLUE)}
+    ${hBar('Frequent price/scheme changes',3,5,PURPLE)}
+    ${hBar('Inconsistent supply',4,5,PINK)}
+    ${hBar('Poor communication',2,5,GRAY)}
+  </div>
+</div>
+<p class="section-title">GST & invoicing challenges</p>
+<div class="insight-box"><b>Claim delays & invoice mismatch</b> emerged as the top GST/invoicing pain point across 3 of 5 stockists. D.R. Pharma and Dhanwantari Agencies (Shirpur) both cited "claim delays, return adjustment complexity" and "invoice mismatch issues." One stockist rated expired stock handling as "difficult to handle."</div>
+<div class="insight-box"><b>Inventory software</b>: MARG-ERP adopted by 2 stockists; "Busy accounting" and "Matrix" by 1 each. One stockist uses no dedicated software. ERP penetration is partial but growing.</div>
+<div class="insight-box"><b>Shortage response</b>: All 5 stockists reported offering partial fulfilment + follow-up supply. 4 of 5 maintain priority allocation to regular retailers. Supply alternatives to competing brands are used by 4 of 5 in shortage situations.</div>
+`;
+
+setTimeout(()=>{
+  mkChart('scIssue','bar',['Short supply','Transport delay','Expiry/slow move','Breakage in transit','Inconsistent dispatch','Poor comms'],
+    [{label:'Very difficult',data:[2,1,3,2,1,1],backgroundColor:CORAL,borderWidth:0},
+     {label:'Difficult',data:[2,2,1,1,2,2],backgroundColor:AMBER,borderWidth:0},
+     {label:'Neutral',data:[1,2,1,2,2,2],backgroundColor:GRAY,borderWidth:0}],
+    {scales:{x:{stacked:true,grid:{display:false}},y:{stacked:true,beginAtZero:true,max:5}},plugins:{legend:{display:true,position:'bottom',labels:{font:{size:11},boxWidth:10}}},indexAxis:'y'});
+},300);
+
+// ── SECTION 3: GP DOCTORS ──
+document.getElementById('sec-3').innerHTML=`
+<div class="metrics">
+  <div class="metric"><div class="val">30</div><div class="lbl">GPs surveyed</div></div>
+  <div class="metric"><div class="val">BAMS (16)</div><div class="lbl">Most common qual.</div></div>
+  <div class="metric"><div class="val">40–60</div><div class="lbl">Avg patients/day</div></div>
+  <div class="metric"><div class="val">~90%</div><div class="lbl">OPD share</div></div>
+  <div class="metric"><div class="val">20–100</div><div class="lbl">MR contacts/month</div></div>
+</div>
+<div class="charts-2">
+  <div class="chart-card"><h3>GP qualification breakdown (n=30)</h3>${mkCanvas('gpQual',180)}
+    <div class="leg">
+      <span><span class="dot" style="background:${BLUE}"></span>BAMS (16)</span>
+      <span><span class="dot" style="background:${TEAL}"></span>MBBS (12)</span>
+      <span><span class="dot" style="background:${CORAL}"></span>MBBS+MD (2)</span>
+    </div>
+  </div>
+  <div class="chart-card"><h3>Top 5 disease categories seen by GPs</h3>${mkCanvas('gpDis',180)}</div>
+</div>
+<div class="charts-2">
+  <div class="chart-card"><h3>Molecule selection factors (avg rank, n=30)</h3>
+    ${hBar('Efficacy in practice',1.5,5,BLUE)}
+    ${hBar('Safety profile',2.0,5,TEAL)}
+    ${hBar('Convenience',3.2,5,AMBER)}
+    ${hBar('No other alternative',3.0,5,CORAL)}
+    ${hBar('Other (cost, brand)',4.1,5,GRAY)}
+  </div>
+  <div class="chart-card"><h3>Most frequently prescribed molecule classes</h3>
+    ${hBar('Paracetamol / NSAIDs',28,30,CORAL)}
+    ${hBar('Antibiotics (Amox, Azithro)',26,30,BLUE)}
+    ${hBar('Pantoprazole / PPIs',22,30,TEAL)}
+    ${hBar('Metformin / antidiabetics',18,30,AMBER)}
+    ${hBar('Amlodipine / antihypertensives',15,30,PURPLE)}
+    ${hBar('Levocetrizine / antihistamines',12,30,PINK)}
+  </div>
+</div>
+<p class="section-title">Social media impact on patients (GP-reported)</p>
+<div class="charts-2">
+  <div class="chart-card"><h3>Impact level on patient behaviour</h3>${mkCanvas('gpSM',190)}
+    <div class="leg">
+      <span><span class="dot" style="background:${BLUE}"></span>Increased awareness</span>
+      <span><span class="dot" style="background:${CORAL}"></span>Self-medication rise</span>
+      <span><span class="dot" style="background:${AMBER}"></span>Proactive checkups</span>
+      <span><span class="dot" style="background:${TEAL}"></span>Clinic queries up</span>
+    </div>
+  </div>
+  <div class="chart-card"><h3>Patient challenges (GP-reported, frequency)</h3>
+    ${hBar('Cost / affordability',22,30,CORAL)}
+    ${hBar('Non-adherence / compliance',20,30,AMBER)}
+    ${hBar('Lack of awareness',18,30,BLUE)}
+    ${hBar('Self-medication',15,30,PINK)}
+    ${hBar('Poor follow-up',14,30,PURPLE)}
+    ${hBar('Late diagnosis',10,30,GRAY)}
+  </div>
+</div>
+<p class="section-title">What GPs value most / least from pharma companies</p>
+<div class="charts-2">
+  <div class="chart-card"><h3>Most valued MR practices</h3>
+    ${hBar('Scientific / ethical info',22,30,TEAL)}
+    ${hBar('Samples for needy patients',18,30,BLUE)}
+    ${hBar('Brief, focused detailing',15,30,CORAL)}
+    ${hBar('CME / education',12,30,AMBER)}
+    ${hBar('Honest data',10,30,PURPLE)}
+  </div>
+  <div class="chart-card"><h3>Least valued / disliked practices</h3>
+    ${hBar('Aggressive / pushy promotion',20,30,CORAL)}
+    ${hBar('Gifting to influence Rx',16,30,AMBER)}
+    ${hBar('Wasting OPD time',15,30,RED)}
+    ${hBar('Repetitive same info',14,30,PINK)}
+    ${hBar('Non-scientific claims',12,30,PURPLE)}
+  </div>
+</div>
+`;
+
+setTimeout(()=>{
+  mkChart('gpQual','doughnut',['BAMS','MBBS','MBBS+MD'],[{data:[16,12,2],backgroundColor:[BLUE,TEAL,CORAL],borderWidth:1}],{cutout:'55%'});
+  mkChart('gpDis','bar',['Fever/viral','RTI/cough','Gastric/acidity','Hypertension','Diabetes','Body pain','Skin infection'],[{data:[28,25,22,18,17,14,10],backgroundColor:[CORAL,BLUE,TEAL,AMBER,PURPLE,PINK,GREEN],borderWidth:0}],{scales:{x:{grid:{display:false}},y:{beginAtZero:true}},indexAxis:'y'});
+  mkChart('gpSM','bar',['Increased awareness','Self-medication','Proactive checkups','More clinic queries'],
+    [{label:'Major',data:[6,14,4,7],backgroundColor:CORAL,borderWidth:0},
+     {label:'Moderate',data:[16,10,14,13],backgroundColor:AMBER,borderWidth:0},
+     {label:'Minor/neutral',data:[8,6,12,10],backgroundColor:GRAY,borderWidth:0}],
+    {scales:{x:{stacked:true,grid:{display:false}},y:{stacked:true,beginAtZero:true,max:30}},plugins:{legend:{display:true,position:'bottom',labels:{font:{size:11},boxWidth:10}}}});
+},400);
+
+// ── SECTION 4: SPECIALIST (GYNEC) ──
+document.getElementById('sec-4').innerHTML=`
+<div class="metrics">
+  <div class="metric"><div class="val">20</div><div class="lbl">Specialists surveyed</div></div>
+  <div class="metric"><div class="val">All OBG/Gynec</div><div class="lbl">Specialty focus</div></div>
+  <div class="metric"><div class="val">30–45</div><div class="lbl">Avg patients/day</div></div>
+  <div class="metric"><div class="val">~80%</div><div class="lbl">OPD share</div></div>
+</div>
+<div class="charts-2">
+  <div class="chart-card"><h3>Top 5 conditions seen (n=20)</h3>
+    ${hBar('Pregnancy/ANC care',18,20,BLUE)}
+    ${hBar('PCOS/PCOD',17,20,PINK)}
+    ${hBar('Menstrual irregularities',15,20,CORAL)}
+    ${hBar('Leucorrhea/infections',14,20,TEAL)}
+    ${hBar('Infertility',13,20,AMBER)}
+    ${hBar('Menopause symptoms',6,20,PURPLE)}
+  </div>
+  <div class="chart-card"><h3>Rising disease trend awareness</h3>
+    ${hBar('PCOS / infertility rising',18,20,PINK)}
+    ${hBar('High-risk pregnancies',12,20,CORAL)}
+    ${hBar('Menstrual disorders in young',14,20,AMBER)}
+    ${hBar('Lifestyle-linked (stress,diet)',16,20,PURPLE)}
+    ${hBar('Late family planning',8,20,BLUE)}
+  </div>
+</div>
+<div class="charts-2">
+  <div class="chart-card"><h3>Most prescribed molecules by indication</h3>
+    <table class="heatmap-table">
+      <tr><th>Indication</th><th>Molecule 1</th><th>Molecule 2</th></tr>
+      <tr><td>PCOS</td><td>Myo-inositol</td><td>Metformin</td></tr>
+      <tr><td>Infertility</td><td>Letrozole</td><td>Clomiphene</td></tr>
+      <tr><td>UTI/Leucorrhea</td><td>Fosfomycin</td><td>Fluconazole</td></tr>
+      <tr><td>Menorrhagia</td><td>Tranexamic acid</td><td>Progesterone</td></tr>
+      <tr><td>ANC</td><td>Iron + Folic acid</td><td>Calcium</td></tr>
+    </table>
+  </div>
+  <div class="chart-card"><h3>New/emerging molecules — specialist view</h3>
+    <table class="heatmap-table">
+      <tr><th>Molecule</th><th>Use</th><th>Game-changing?</th></tr>
+      <tr><td>Letrozole</td><td>Infertility/PCOS</td><td><span class="pill pill-green">Yes</span></td></tr>
+      <tr><td>Dienogest</td><td>AUB/endometriosis</td><td><span class="pill pill-green">Yes</span></td></tr>
+      <tr><td>Fosfomycin</td><td>UTI</td><td><span class="pill pill-green">Yes</span></td></tr>
+      <tr><td>Tetrahydrofolate</td><td>ANC / fertility</td><td><span class="pill pill-green">Yes</span></td></tr>
+      <tr><td>Unigolix</td><td>Fibroids</td><td><span class="pill pill-amber">Trial</span></td></tr>
+    </table>
+  </div>
+</div>
+<p class="section-title">Patient challenges & social media impact</p>
+<div class="charts-2">
+  <div class="chart-card"><h3>Top patient challenges (specialist-reported)</h3>
+    ${hBar('Cost / financial',16,20,CORAL)}
+    ${hBar('Poor compliance',15,20,AMBER)}
+    ${hBar('Lack of awareness',14,20,BLUE)}
+    ${hBar('Social stigma',10,20,PINK)}
+    ${hBar('Follow-up dropout',13,20,PURPLE)}
+    ${hBar('Fear of side effects',9,20,GRAY)}
+  </div>
+  <div class="chart-card"><h3>SM impact on gynec patients</h3>${mkCanvas('spSM',190)}</div>
+</div>
+`;
+
+setTimeout(()=>{
+  mkChart('spSM','bar',['Disease awareness','Proactive checkups','Clinic queries','Self-medication'],
+    [{label:'Major',data:[9,5,6,10],backgroundColor:CORAL,borderWidth:0},
+     {label:'Moderate',data:[8,10,9,5],backgroundColor:AMBER,borderWidth:0},
+     {label:'Minor/neutral',data:[3,5,5,5],backgroundColor:GRAY,borderWidth:0}],
+    {scales:{x:{stacked:true,grid:{display:false}},y:{stacked:true,beginAtZero:true,max:20}},plugins:{legend:{display:true,position:'bottom',labels:{font:{size:11},boxWidth:10}}}});
+},500);
+
+// ── SECTION 5: BRAND MANAGERS ──
+document.getElementById('sec-5').innerHTML=`
+<div class="metrics">
+  <div class="metric"><div class="val">5</div><div class="lbl">Brand managers</div></div>
+  <div class="metric"><div class="val">3.5–8 yrs</div><div class="lbl">Avg experience</div></div>
+  <div class="metric"><div class="val">Derma + Oncology</div><div class="lbl">Dominant therapy areas</div></div>
+  <div class="metric"><div class="val">6–12 months</div><div class="lbl">Typical brand acceptance</div></div>
+</div>
+<div class="charts-2">
+  <div class="chart-card"><h3>Brand strategy preparation — ranked inputs (avg)</h3>
+    ${hBar('Doctor feedback (rank 1)',1.4,6,BLUE)}
+    ${hBar('Prescription analysis',2.2,6,TEAL)}
+    ${hBar('Market research',2.6,6,CORAL)}
+    ${hBar('Sales data analysis',3.1,6,AMBER)}
+    ${hBar('Patient feedback',4.2,6,GRAY)}
+    ${hBar('Stockist input / field',5.4,6,PINK)}
+  </div>
+  <div class="chart-card"><h3>Brand success factors — ranked (avg)</h3>
+    ${hBar('Efficacy of molecule',1.4,7,BLUE)}
+    ${hBar('Doctor acceptance/trust',2.1,7,TEAL)}
+    ${hBar('Product quality',2.8,7,CORAL)}
+    ${hBar('Strong marketing',3.5,7,AMBER)}
+    ${hBar('Competitive pricing',3.8,7,PURPLE)}
+    ${hBar('Patient awareness',4.2,7,PINK)}
+    ${hBar('Innovation/differentiation',5.0,7,GRAY)}
+  </div>
+</div>
+<div class="charts-2">
+  <div class="chart-card"><h3>Promotion tool effectiveness ratings</h3>${mkCanvas('bmPromo',190)}
+    <div class="leg">
+      <span><span class="dot" style="background:${BLUE}"></span>Extremely effective</span>
+      <span><span class="dot" style="background:${TEAL}"></span>Effective</span>
+      <span><span class="dot" style="background:${GRAY}"></span>Moderate</span>
+    </div>
+  </div>
+  <div class="chart-card"><h3>Brand manager challenge levels</h3>${mkCanvas('bmChallenge',190)}</div>
+</div>
+<p class="section-title">Factors influencing doctor prescribing (brand manager view)</p>
+<div class="chart-card full-w"><h3>Importance ratings of prescribing influence factors</h3>${mkCanvas('bmDrFactor',180)}</div>
+<p class="section-title">Common marketing mistakes identified</p>
+<div class="charts-2">
+  <div class="insight-box"><b>Ignoring customer insights</b> was the #1 cited mistake across all 5 brand managers. All confirmed this as a pitfall they actively try to avoid.</div>
+  <div class="insight-box"><b>Poor MR training</b> and <b>weak differentiation from competitors</b> were the 2nd and 3rd most commonly cited mistakes. Inconsistent messaging was cited by 4/5.</div>
+</div>
+`;
+
+setTimeout(()=>{
+  mkChart('bmPromo','bar',['Visual aids','CME','Digital marketing','Scientific journals','Conferences'],
+    [{label:'Extremely effective',data:[2,4,3,3,4],backgroundColor:BLUE,borderWidth:0},
+     {label:'Effective',data:[2,1,1,1,1],backgroundColor:TEAL,borderWidth:0},
+     {label:'Moderately effective',data:[1,0,1,1,0],backgroundColor:GRAY,borderWidth:0}],
+    {scales:{x:{stacked:true,grid:{display:false}},y:{stacked:true,beginAtZero:true,max:5}},plugins:{legend:{display:false}}});
+  mkChart('bmChallenge','bar',['Competitive pressure','Cross-func. alignment','Budget/ROI','Dr behaviour','Regulatory'],
+    [{label:'Very challenging',data:[3,1,1,3,1],backgroundColor:CORAL,borderWidth:0},
+     {label:'Challenging',data:[2,3,3,2,3],backgroundColor:AMBER,borderWidth:0},
+     {label:'Moderate/slight',data:[0,1,1,0,1],backgroundColor:GRAY,borderWidth:0}],
+    {scales:{x:{stacked:true,grid:{display:false}},y:{stacked:true,beginAtZero:true,max:5}},plugins:{legend:{display:true,position:'bottom',labels:{font:{size:11},boxWidth:10}}}});
+  mkChart('bmDrFactor','bar',['Clinical efficacy','Safety','Brand reputation','Peer influence','KOL rec.','Patient affordability','MR detailing'],
+    [{label:'Extremely important',data:[5,4,3,2,2,3,4],backgroundColor:BLUE,borderWidth:0},
+     {label:'Important',data:[0,1,2,2,2,2,1],backgroundColor:TEAL,borderWidth:0},
+     {label:'Moderate',data:[0,0,0,1,1,0,0],backgroundColor:GRAY,borderWidth:0}],
+    {scales:{x:{stacked:true,grid:{display:false}},y:{stacked:true,beginAtZero:true,max:5}},plugins:{legend:{display:true,position:'bottom',labels:{font:{size:11},boxWidth:10}}}});
+},600);
+
+// ── SECTION 6: CROSS-STAKEHOLDER INSIGHTS ──
+document.getElementById('sec-6').innerHTML=`
+<p class="section-title" style="margin-top:0">Ecosystem coverage summary</p>
+<div class="metrics">
+  <div class="metric"><div class="val">22</div><div class="lbl">MRs (field force)</div></div>
+  <div class="metric"><div class="val">20</div><div class="lbl">Retail chemists</div></div>
+  <div class="metric"><div class="val">30</div><div class="lbl">GPs</div></div>
+  <div class="metric"><div class="val">20</div><div class="lbl">Specialists</div></div>
+  <div class="metric"><div class="val">5</div><div class="lbl">Brand managers</div></div>
+  <div class="metric"><div class="val">5</div><div class="lbl">Stockists</div></div>
+  <div class="metric"><div class="val">5</div><div class="lbl">Hospitals (pvt)</div></div>
+  <div class="metric"><div class="val">5</div><div class="lbl">Govt hospitals</div></div>
+  <div class="metric"><div class="val">2</div><div class="lbl">PHCs</div></div>
+  <div class="metric"><div class="val">3</div><div class="lbl">ASHA workers</div></div>
+</div>
+
+<p class="section-title">Key cross-stakeholder concordances & divergences</p>
+
+<div class="insight-box"><b>Brand substitution gap:</b> MRs report substitution happens "often" (8/22) to "sometimes" (9/22), while chemists confirm it's driven primarily by non-availability and margin, not patient demand. Yet GPs rarely permit substitution in writing — this gap represents a key compliance risk for pharma brands.</div>
+
+<div class="insight-box"><b>Efficacy consensus across all prescription-side stakeholders:</b> MRs, GPs, specialists, and brand managers all rank clinical efficacy as the #1 factor in molecule/brand choice. This is the one consistent signal across 4 different survey populations, validating efficacy-led messaging as the single most effective strategy.</div>
+
+<div class="insight-box"><b>MR visit frequency vs doctor expectations:</b> GPs receive 20–130+ MR contacts/month. Most GPs tolerate 20–40/month and value monthly or weekly visits. MRs report daily or alternate-day chemist coverage but the perceived value by GPs is concentrated in scientific content and samples — not frequency itself.</div>
+
+<div class="insight-box"><b>Supply chain stress converging at stockist:</b> Stockists face pressure from both ends — pharma companies (inconsistent dispatch, short supply) and retailers (non-availability complaints). Only 1 of 5 stockists reported no major issues. Chemists rate stock availability as their #1 desirability factor, yet stockists cite "very difficult" partial order fulfilment from companies.</div>
+
+<div class="insight-box"><b>PCOS and lifestyle disease surge — universal signal:</b> All 20 specialist gynecologists and 70%+ of GPs independently flagged rising PCOS, lifestyle diseases, and mental-health-linked conditions as major emerging patterns. Brand managers in relevant therapy areas should note this aligns with a genuine epidemiological shift, not demand creation.</div>
+
+<div class="insight-box"><b>ASHA workers are an underdeveloped channel:</b> All 3 ASHA workers surveyed actively explain medicines and encourage adherence, but face low incentives, irregular pay, and medicine stockouts blamed on them by patients. They interact daily with PHC staff and weekly with ANMs — making them potential influencers for generics and government programs that pharma companies largely ignore.</div>
+
+<div class="insight-box"><b>Government hospital vs private hospital divide:</b> Govt hospitals universally report supply delays and essential-medicine shortages, defaulting to prescribing alternatives or advising outside purchases. Private hospitals use approved formulary lists and are responsive to MR detailing that provides CME and unbiased data — aggressive promotion is explicitly disliked in both settings.</div>
+
+<p class="section-title">Geographic coverage of study</p>
+<div class="chart-card full-w"><h3>Region-wise respondent distribution</h3>
+${mkCanvas('crossGeo',200)}
+<div class="leg">
+  <span><span class="dot" style="background:${BLUE}"></span>Dhule/Shirpur (Maharashtra)</span>
+  <span><span class="dot" style="background:${TEAL}"></span>Jalgaon (Maharashtra)</span>
+  <span><span class="dot" style="background:${CORAL}"></span>Kharghar/Mumbai (Maharashtra)</span>
+  <span><span class="dot" style="background:${AMBER}"></span>Valsad (Gujarat)</span>
+  <span><span class="dot" style="background:${PURPLE}"></span>Bhopal (MP)</span>
+  <span><span class="dot" style="background:${PINK}"></span>Hyderabad (dual) / other</span>
+</div>
+</div>
+
+<p class="section-title">RCPA snapshot — brand vs competitor margins</p>
+<div class="chart-card full-w">
+  <h3>Sample RCPA findings from 3 pharmacies</h3>
+  <table class="heatmap-table" style="width:100%">
+    <tr><th>Category</th><th>Top brand</th><th>Margin</th><th>Competitor</th><th>Comp. margin</th><th>Substitution risk</th></tr>
+    <tr><td>Anti-infective</td><td>Augmentin (GSK)</td><td>~10%</td><td>Moxikind-CV (Mankind)</td><td>~20%</td><td><span class="pill pill-red">High</span></td></tr>
+    <tr><td>Gastro</td><td>Pan 40 (Alkem)</td><td>Standard</td><td>Pantocid (Sun Pharma)</td><td>Similar</td><td><span class="pill pill-amber">Moderate</span></td></tr>
+    <tr><td>Antidiabetic</td><td>Glycomet (USV)</td><td>Moderate</td><td>Gluconorm (Lupin)</td><td>N/A</td><td><span class="pill pill-green">Low (brand loyalty)</span></td></tr>
+    <tr><td>Antihypertensive</td><td>Telma (Glenmark)</td><td>Standard</td><td>Tazloc (USV)</td><td>Similar</td><td><span class="pill pill-green">Low (Rx-driven)</span></td></tr>
+    <tr><td>Analgesic (OTC)</td><td>Combiflam (Sanofi)</td><td>N/A</td><td>Zerodol-P (Ipca)</td><td>Good margin</td><td><span class="pill pill-red">High (self-medic)</span></td></tr>
+    <tr><td>Antibiotic (generic)</td><td>Macpod 200 (Macloeds)</td><td>15%</td><td>Cefodom 200 (Sun)</td><td>10–12%</td><td><span class="pill pill-amber">Moderate</span></td></tr>
+  </table>
+</div>
+`;
+
+setTimeout(()=>{
+  mkChart('crossGeo','bar',['Dhule/Shirpur','Jalgaon','Kharghar/Mumbai','Valsad (Gujarat)','Bhopal (MP)','Other'],
+    [{data:[32,12,18,20,18,2],backgroundColor:[BLUE,TEAL,CORAL,AMBER,PURPLE,GRAY],borderWidth:0}],
+    {scales:{x:{grid:{display:false}},y:{beginAtZero:true,title:{display:true,text:'No. of respondents',font:{size:11}}}},plugins:{legend:{display:false}}});
+},700);
+</script>
